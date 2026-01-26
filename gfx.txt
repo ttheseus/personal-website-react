@@ -1,0 +1,9 @@
+COLOR PALETTE
+
+light pink: #faccd0
+blue: #538899
+light blue: #a8fcfe
+dark pink: #f80780
+dark purple: #522062
+light purple: #935ba8
+white: #f2eef5

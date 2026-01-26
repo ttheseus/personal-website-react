@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --font-inconsolata: 'Inconsolata', monospace;
+}
+
+body {
+  background: radial-gradient(1200px 800px at 50% 40%, rgba(82, 32, 98, 0.55), rgba(0, 0, 0, 1) 60%),
+              radial-gradient(900px 700px at 60% 60%, rgba(83, 136, 153, 0.35), rgba(0, 0, 0, 0) 60%),
+              #000;
+  color: var(--foreground);
+  font-family: 'Nunito', sans-serif;
+  overflow: hidden; /* important: we’ll use scroll controls instead */
+}
+
+/* --- cyberpunk label styles for planet hover --- */
+.planet-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(250, 204, 208, 0.65);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #faccd0;
+  backdrop-filter: blur(6px);
+  transform-origin: left center;
+  animation: labelIn 240ms ease-out forwards;
+  box-shadow: 0 0 22px rgba(250, 204, 208, 0.12);
+}
+
+@keyframes labelIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cyber-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-inconsolata);
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+}
+
+.cyber-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.cyber-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(250, 204, 208, 0.85);
+  box-shadow: 0 0 10px rgba(250, 204, 208, 0.35);
+  animation: dotPulse 900ms ease-in-out infinite;
+}
+
+.cyber-dot:nth-child(2) { animation-delay: 120ms; }
+.cyber-dot:nth-child(3) { animation-delay: 240ms; }
+
+@keyframes dotPulse {
+  0%, 100% { transform: translateY(0); opacity: 0.65; }
+  50%      { transform: translateY(-3px); opacity: 1; }
+}
+
+/* @theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+} */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #f2eef5;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% { 
+    transform: translateY(-2px); 
+  }
+  50% { 
+    transform: translateY(2px); 
+  } 
+}
+
+@keyframes pulsing {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+button {
+  position: relative;
+  cursor: pointer;
+  border: transparent;
+  border-radius: 10px;
+  z-index: 2;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+button::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  border: 2px solid #935ba8;
+  background-color: transparent;
+  border-radius: 10px;
+  transition: width 0.5s ease, height 0.5s ease;
+  opacity: 1;
+}
+
+button:hover {
+  animation: pulsing 1s infinite;
+}
+
+button::before {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 10%;
+  width: 0;
+  height: 1px; /* Adjust thickness of the underline */
+  background-color: #faccd0; /* Color of the underline */
+  transition: width 0.3s ease; /* Smooth transition for drawing */
+}
+
+button:hover::before {
+  width: 80%; /* When hovered, draw the underline */
+  left: 10%;
+}
+
+.heart-bounce {
+  animation: bounce 1.2s ease-in-out infinite;
+}
+
+.heart-bounce:nth-child(2) { animation-delay: 0.3s; }
+.heart-bounce:nth-child(4) { animation-delay: 0.6s; }
+
+.typing-demo {
+  width: 20.5ch;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  overflow: hidden;
+  border-right: 2px solid #522062;
+  animation: typing 2.4s steps(21), blink 0.7s step-end infinite;
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 20.5ch }
+}
+
+@keyframes blink {
+  50% { border-color: transparent }
+}
+
+body {
+  background: var(--background);
+  background: linear-gradient(to bottom, #522062 -50%, #538899 10%, #faccd0 90%, #f80780 140%), 
+              url('/assets/background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-blend-mode: overlay;
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: 'Nunito', sans-serif;
+}
+
+h2 {
+  font-family: 'Inconsolata', monospace;
+}
+
+/* --- planet hover label: dot -> diagonal line -> underline --- */
+.planetLabelWrap {
+  pointer-events: none;
+  transform-origin: left center;
+}
+
+.planetLabel {
+  position: relative;
+  display: inline-block;
+  padding: 10px 12px 12px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(250, 204, 208, 0.55);
+  color: #faccd0;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 22px rgba(250, 204, 208, 0.12);
+}
+
+.planetLabelText {
+  position: relative;
+  font-weight: 600;
+  padding-bottom: 6px; /* space for underline */
+  display: inline-block;
+}
+
+/* underline that "extends" from the diagonal line end */
+.planetLabelText::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: var(--uline, 0px);
+  background: rgba(250, 204, 208, 0.95);
+  box-shadow: 0 0 10px rgba(250, 204, 208, 0.35);
+  transform-origin: left center;
+}
+
+/* the dot sitting on the planet (screen-space) */
+.planetDot {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(250, 204, 208, 0.95);
+  box-shadow: 0 0 12px rgba(250, 204, 208, 0.45);
+}
+
+/* SVG line container */
+.planetLineSvg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+
+/* draw animation */
+.drawLine {
+  stroke-dasharray: var(--dash, 200);
+  stroke-dashoffset: var(--dash, 200);
+  animation: lineDraw 220ms ease-out forwards;
+}
+
+@keyframes lineDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+.drawUnderline .planetLabelText::after {
+  animation: underlineDraw 240ms ease-out forwards;
+}
+
+@keyframes underlineDraw {
+  from { width: 0px; opacity: 0.6; }
+  to   { width: var(--uline, 120px); opacity: 1; }
+}
+
+/* hologram flicker: happens only once when hover begins */
+.holoFlicker {
+  animation: holoFlicker 180ms steps(2, end) 1;
+}
+
+@keyframes holoFlicker {
+  0%   { opacity: 0.25; filter: brightness(1.2); }
+  20%  { opacity: 1; }
+  40%  { opacity: 0.2; }
+  60%  { opacity: 1; }
+  100% { opacity: 1; filter: none; }
+}
+
+.hide-native-scrollbar{
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-native-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari */
+}
