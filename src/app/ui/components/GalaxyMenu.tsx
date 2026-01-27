@@ -1,12 +1,13 @@
 // app/components/GalaxyMenu.tsx
 "use client";
 
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Stars, ScrollControls, useScroll, Billboard, Text, Line, Html } from "@react-three/drei";
+import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
+import { Stars, ScrollControls, useScroll, Billboard, Text, Line, Html, Decal } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useRouter } from "next/navigation";
 import { useLoading } from "./Loading";
+
 
 type PlanetDef = {
   name: string;
@@ -15,21 +16,89 @@ type PlanetDef = {
   radius: number;
   color: string;
   rotationSpeed: number;
+  axis: [number, number, number];
 };
+
+function axisFromObliquity(obliquityDeg: number, yawDeg: number) {
+  // obliquityDeg: tilt away from +Y (0 = straight up)
+  // yawDeg: rotates the tilt direction around +Y so planets don’t all “lean” the same way
+  const tilt = THREE.MathUtils.degToRad(obliquityDeg);
+  const yaw = THREE.MathUtils.degToRad(yawDeg);
+
+  const y = Math.cos(tilt);
+  const r = Math.sin(tilt);
+
+  const x = r * Math.cos(yaw);
+  const z = r * Math.sin(yaw);
+
+  // normalized already, but keep it safe
+  const v = new THREE.Vector3(x, y, z).normalize();
+  return [v.x, v.y, v.z] as [number, number, number];
+}
 
 function Planet({
   def,
   onNavigate,
+  showOverlay,
 }: {
   def: PlanetDef;
   onNavigate: (href: string) => void;
+  showOverlay?: boolean;
 }) {
   const rootRef = useRef<THREE.Group>(null);     // position + hover scale
+  const tiltRef = useRef<THREE.Group>(null);     // ✅ fixed axis tilt (static)
   const spinRef = useRef<THREE.Group>(null);     // rotation only (planet spins)
   const meshRef = useRef<THREE.Mesh>(null);      // sphere
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const labelRef = useRef<THREE.Group>(null);    // anchor group on sphere surface
 
   const { camera } = useThree();
+  const overlayTex = useLoader(THREE.TextureLoader, "/assets/Planet1.png");
+
+  useEffect(() => {
+    // Three.js version-safe sRGB setup
+    if ("colorSpace" in overlayTex) {
+      // @ts-ignore
+      overlayTex.colorSpace = THREE.SRGBColorSpace;
+    } else {
+      // older Three
+      // @ts-ignore
+      overlayTex.encoding = THREE.sRGBEncoding;
+    }
+
+    overlayTex.anisotropy = 8;
+
+    // Full-sphere UV wrap behavior
+    overlayTex.wrapS = THREE.RepeatWrapping;
+    overlayTex.wrapT = THREE.ClampToEdgeWrapping;
+
+    overlayTex.generateMipmaps = true;
+    overlayTex.minFilter = THREE.LinearMipmapLinearFilter;
+    overlayTex.magFilter = THREE.LinearFilter;
+
+    overlayTex.needsUpdate = true;
+  }, [overlayTex]);
+
+  useEffect(() => {
+    if (meshRef.current) {
+      const m = meshRef.current.material as THREE.MeshStandardMaterial;
+      m.needsUpdate = true;
+    }
+  }, [showOverlay]);
+
+  useEffect(() => {
+    if (!tiltRef.current) return;
+
+    const axis = new THREE.Vector3(...def.axis).normalize();
+
+    // orient the tilt group so its local +Y matches the desired axis
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      axis
+    );
+
+    tiltRef.current.quaternion.copy(q);
+  }, [def.axis]);
 
   const [hovered, setHovered] = useState(false);
   const [flickerOn, setFlickerOn] = useState(false);
@@ -59,21 +128,24 @@ function Planet({
 
   const material = useMemo(() => {
     return new THREE.MeshStandardMaterial({
-      color: new THREE.Color(def.color),
+      color: new THREE.Color(showOverlay ? "#ffffff" : def.color),
+      map: showOverlay ? overlayTex : null,
       roughness: 0.5,
       metalness: 0.1,
       emissive: new THREE.Color("#000000"),
       emissiveIntensity: 0.35,
     });
-  }, [def.color]);
+  }, [def.color, overlayTex, showOverlay]);
 
   // Spin + hover pulse
   useFrame((_, dt) => {
     if (!rootRef.current || !spinRef.current || !meshRef.current) return;
 
-    // spin the planet
+    // Keep label anchored to the same viewing spot while hovered
+    if (hovered) updateAnchorFromView();
+
+    // ✅ spin around the planet’s tilted axis (tiltRef defines the axis, spinRef rotates around its local Y)
     spinRef.current.rotation.y += dt * def.rotationSpeed;
-    spinRef.current.rotation.x += dt * def.rotationSpeed * 0.25;
 
     // hover scale on root so label + planet scale together
     const targetScale = hovered ? 1.12 : 1.0;
@@ -83,10 +155,10 @@ function Planet({
     );
 
     // emissive highlight
-    (meshRef.current.material as THREE.MeshStandardMaterial).emissive.set(
-      hovered ? "#ffffff" : "#000000"
-    );
-    (meshRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = hovered ? 0.9 : 0.35;
+    const mat = meshRef.current.material as THREE.MeshStandardMaterial;
+    mat.emissive.set("#ffffff");                 // keep emissive white...
+    mat.emissiveIntensity = hovered ? 0.05 : 0;  // ...but low intensity (not blown out)
+
 
     // clamp label size based on camera distance (min/max)
     const centerW = rootRef.current.getWorldPosition(tmpCenterW);
@@ -134,9 +206,10 @@ function Planet({
   }
 
 
-  // Compute anchor ONCE at hover start, in mesh-local space (correct for different sizes)
-  function computeAnchorOnce() {
-    if (!rootRef.current || !meshRef.current) return;
+  // Keep label dot in the same VIEWING spot (top-visible hemisphere) regardless of planet rotation/axis.
+  // This does NOT attach to the spinning surface — it's view-anchored.
+  function updateAnchorFromView() {
+    if (!rootRef.current) return;
 
     const centerW = rootRef.current.getWorldPosition(tmpCenterW);
     ndc.copy(centerW).project(camera);
@@ -148,7 +221,7 @@ function Planet({
     // visible hemisphere direction (planet -> camera)
     toCam.copy(camera.position).sub(centerW).normalize();
 
-    // upper + visible bias
+    // bias toward upper hemisphere in VIEW space
     dirW.copy(toCam).multiplyScalar(1.0).add(upOrtho.clone().multiplyScalar(0.8));
 
     // push inward if near edges (so label stays visible)
@@ -161,11 +234,12 @@ function Planet({
 
     dirW.normalize();
 
-    // world target on sphere surface
-    const r = def.radius * 1.06;
+    // ✅ push the dot outward more, and scale with hover growth so it never gets swallowed
+    const s = rootRef.current.scale.x || 1;         // root scales uniformly
+    const r = def.radius * (1.13 + 0.14 * (s - 1)); // base offset + extra when hovered
     tmpTargetW.copy(centerW).add(dirW.multiplyScalar(r));
 
-    // convert world point to MESH LOCAL so it stays on the same spinning spot
+    // ✅ convert world point into ROOT LOCAL so label does NOT rotate with spin
     tmpLocal.copy(tmpTargetW);
     rootRef.current.worldToLocal(tmpLocal);
 
@@ -174,6 +248,7 @@ function Planet({
     // apply immediately
     if (labelRef.current) labelRef.current.position.copy(anchorLocalRef.current);
   }
+
 
   // Line points: start at dot (0,0,0), go diagonally outward, then underline
   function getLinePoints() {
@@ -189,35 +264,38 @@ function Planet({
 
   return (
     <group ref={rootRef} position={def.position}>
-      {/* ✅ planet spins here */}
-      <group ref={spinRef}>
-        <mesh
-          ref={meshRef}
-          material={material}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            setHovered(true);
-            document.body.style.cursor = "pointer";
-            triggerFlicker();
-            computeAnchorOnce(); // anchor computed in ROOT space now
-            scheduleRandomFlicker();
-          }}
-          onPointerOut={(e) => {
-            e.stopPropagation();
-            setHovered(false);
-            document.body.style.cursor = "default";
-            stopRandomFlicker();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onNavigate(def.href);
-          }}
-        >
-          <sphereGeometry args={[def.radius, 64, 64]} />
-        </mesh>
+      {/* ✅ fixed axis tilt (like a planet’s obliquity) */}
+      <group ref={tiltRef}>
+        {/* ✅ spin happens around the tilted axis */}
+        <group ref={spinRef}>
+          <mesh
+            ref={meshRef}
+            material={material}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              setHovered(true);
+              document.body.style.cursor = "pointer";
+              triggerFlicker();
+              updateAnchorFromView();
+              scheduleRandomFlicker();
+            }}
+            onPointerOut={(e) => {
+              e.stopPropagation();
+              setHovered(false);
+              document.body.style.cursor = "default";
+              stopRandomFlicker();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigate(def.href);
+            }}
+          >
+            <sphereGeometry args={[def.radius, 64, 64]} />
+          </mesh>
+        </group>
       </group>
 
-      {/* ✅ label does NOT spin (not inside spinRef / mesh) */}
+      {/* ✅ label does NOT spin (still outside tilt/spin) */}
       <group ref={labelRef} position={anchorLocalRef.current}>
         {hovered && (
           <group>
@@ -227,8 +305,7 @@ function Planet({
               <meshBasicMaterial
                 color={"black"}
                 transparent
-                opacity={flickerOn ? 0.25 : 0.9}
-              />
+                opacity={flickerOn ? 0.25 : 0.9} />
             </mesh>
 
             {/* line */}
@@ -253,22 +330,19 @@ function Planet({
                   fillOpacity={flickerOn ? 0.25 : 0.95}
                   onSync={() => {
                     const w = textRef.current?.textRenderInfo?.blockBounds?.[2] ?? 0;
-                    // blockBounds: [minX, minY, maxX, maxY] in local text units
-                    // width = maxX - minX
+                    // blockBounds: [minX, minY, maxX, maxY] in local text units 
+                    // width = maxX - minX 
                     const minX = textRef.current?.textRenderInfo?.blockBounds?.[0] ?? 0;
                     const maxX = textRef.current?.textRenderInfo?.blockBounds?.[2] ?? 0;
                     const width = Math.max(0, maxX - minX);
-
-                    // clamp underline length
+                    // clamp underline length 
                     setUnderlineLen(THREE.MathUtils.clamp(width, 0.6, 3.5));
-                  }}
-                >
+                  }} >
                   {def.name}
                 </Text>
               </group>
             </Billboard>
-          </group>
-        )}
+          </group>)}
       </group>
     </group>
   );
@@ -315,7 +389,7 @@ function InvertScrollWheel() {
       e.preventDefault();
 
       // Invert: wheel down normally increases scrollTop; we subtract instead
-      el.scrollTop += e.deltaY;
+      el.scrollTop -= e.deltaY;
     };
 
     // Must be non-passive to call preventDefault
@@ -360,7 +434,7 @@ function DistanceScrollbar() {
     const y = clientY - r.top;
     setOffset(y / r.height);
   };
-  
+
   useFrame(() => {
     const p = scroll.offset; // 0..1
 
@@ -455,7 +529,7 @@ function DistanceScrollbar() {
               </div>
 
               <div
-                ref = {thumbRef}
+                ref={thumbRef}
                 className="absolute left-[6px] right-[6px] h-[3px] rounded-full bg-[#f2eef5] shadow-[0_0_14px_rgba(242,238,245,0.25)]"
                 style={{ top: `calc(0% - 1px)` }}
                 onPointerDown={(e) => {
@@ -477,9 +551,141 @@ function DistanceScrollbar() {
   );
 }
 
+function StarStreakField({
+  count = 1200,
+  radius = 22,
+  depth = 130,
+  scrollOffsetRef,
+  scrollVelRef,
+}: {
+  count?: number;
+  radius?: number;
+  depth?: number;
+  scrollOffsetRef: React.MutableRefObject<number>;
+  scrollVelRef: React.MutableRefObject<number>;
+}) {
+  const { camera } = useThree();
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  const smoothVelRef = useRef(0);
+
+  const tmpPos = useMemo(() => new THREE.Vector3(), []);
+  const tmpScale = useMemo(() => new THREE.Vector3(), []);
+  const tmpMat = useMemo(() => new THREE.Matrix4(), []);
+  const tmpQuat = useMemo(
+    () => new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0)), // align cylinder axis to Z
+    []
+  );
+
+  const stars = useMemo(() => {
+    const arr: { pos: THREE.Vector3; phase: number }[] = [];
+    const zMin = -70;
+    const zMax = 16;
+
+    for (let i = 0; i < count; i++) {
+      const x = (Math.random() * 2 - 1) * radius;
+      const y = (Math.random() * 2 - 1) * (radius * 0.7);
+      const z = THREE.MathUtils.lerp(zMin, zMax, Math.random());
+      arr.push({ pos: new THREE.Vector3(x, y, z), phase: Math.random() * Math.PI * 2 });
+    }
+    return arr;
+  }, [count, radius]);
+
+  useFrame((state, dt) => {
+    const im = meshRef.current;
+    if (!im) return;
+
+    // velocity is in px/s (we'll map it to world units)
+    const vAbsPx = Math.abs(scrollVelRef.current);
+
+    // smooth velocity to avoid jitter
+    smoothVelRef.current = THREE.MathUtils.lerp(smoothVelRef.current, vAbsPx, 0.12);
+
+    // map px/s -> world streak length
+    const mapped = smoothVelRef.current / 1400; // tune this
+    const streakLen = THREE.MathUtils.clamp(0.06 + mapped * 2.2, 0.06, 3.5);
+
+    // recycle stars along camera travel
+    const camZ = camera.position.z;
+    const behindZ = camZ + 10;
+    const aheadZ = camZ - (depth + 40);
+
+    const t = state.clock.getElapsedTime();
+
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+
+      if (s.pos.z > behindZ) {
+        s.pos.z = aheadZ - Math.random() * 30;
+        s.pos.x = (Math.random() * 2 - 1) * radius;
+        s.pos.y = (Math.random() * 2 - 1) * (radius * 0.7);
+        s.phase = Math.random() * Math.PI * 2;
+      }
+
+      // pulse brightness/size even when stopped
+      const pulse = 0.85 + 0.15 * Math.sin(t * 2.2 + s.phase);
+      const motionAmt = THREE.MathUtils.clamp(mapped * 2.0, 0, 1);
+      const dotScale = THREE.MathUtils.lerp(0.65, 1.0, motionAmt);
+
+      tmpPos.copy(s.pos);
+      tmpScale.set(0.065 * pulse * dotScale, streakLen, 0.065 * pulse * dotScale);
+
+      tmpMat.compose(tmpPos, tmpQuat, tmpScale);
+      im.setMatrixAt(i, tmpMat);
+    }
+
+    im.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined as any, undefined as any, stars.length]}>
+      <sphereGeometry args={[1, 10, 10]} />
+      <meshBasicMaterial
+        color={"#ffffff"}
+        transparent
+        opacity={0.9}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </instancedMesh>
+  );
+}
+
 export default function GalaxyMenu() {
   const router = useRouter();
   const { startLoading } = useLoading();
+  const scrollOffsetRef = useRef(0); // 0..1
+  const scrollVelRef = useRef(0);    // px/s
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let lastT = performance.now();
+
+    const update = () => {
+      const y = window.scrollY;
+      const t = performance.now();
+      const dt = Math.max(1, t - lastT);
+
+      const dy = y - lastY;
+      scrollVelRef.current = (dy / dt) * 1000; // px/s
+
+      const doc = document.documentElement;
+      const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight);
+      scrollOffsetRef.current = y / maxScroll;
+
+      lastY = y;
+      lastT = t;
+    };
+
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   // Order + spacing matters: closest planet is About Me and always starts “near”
   const planets: PlanetDef[] = useMemo(
@@ -489,37 +695,65 @@ export default function GalaxyMenu() {
         href: "/about",
         position: [-2.2, 0.6, 0],
         radius: 1.15,
-        color: "#538899", // blue
+        color: "#538899",
         rotationSpeed: 0.55,
+        axis: axisFromObliquity(18, 25), // slight tilt
       },
       {
         name: "coding projects",
         href: "/coding-projects",
         position: [2.5, -0.4, -12],
         radius: 1.35,
-        color: "#522062", // purple
+        color: "#522062",
         rotationSpeed: 0.35,
+        axis: axisFromObliquity(7, 140), // near-upright
       },
       {
         name: "art commissions",
         href: "/art-commissions",
         position: [-1.0, -0.9, -24],
         radius: 1.25,
-        color: "#f80780", // accent pink
+        color: "#f80780",
         rotationSpeed: 0.7,
+        axis: axisFromObliquity(33, 300), // noticeable tilt
       },
     ],
     []
   );
+
+
+  const closestPlanetIndex = useMemo(() => {
+    const cam = new THREE.Vector3(0, 0, 8); // matches CameraRail start
+    let bestIdx = 0;
+    let bestDist = Infinity;
+
+    planets.forEach((p, i) => {
+      const d = cam.distanceTo(new THREE.Vector3(...p.position));
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    });
+
+    return bestIdx;
+  }, [planets]);
+
 
   return (
     <div className="w-screen h-screen relative">
       <Canvas camera={{ position: [0, 0, 8], fov: 50 }}>
         {/* background stars */}
         <Stars radius={120} depth={80} count={2500} factor={3} fade speed={0.6} />
+        <StarStreakField
+          count={1400}
+          radius={24}
+          depth={140}
+          scrollOffsetRef={scrollOffsetRef}
+          scrollVelRef={scrollVelRef}
+        />
 
         {/* lighting */}
-        <ambientLight intensity={0.35} />
+        <ambientLight intensity={0.7} />
         <pointLight position={[6, 6, 8]} intensity={1.1} color={"#faccd0"} />
         <pointLight position={[-8, -3, -10]} intensity={0.7} color={"#538899"} />
 
@@ -529,14 +763,15 @@ export default function GalaxyMenu() {
           <InvertScrollWheel />
           <DistanceScrollbar />
           {/* planets */}
-          {planets.map((p) => (
-            <Planet 
-              key={p.href} 
-              def={p} 
+          {planets.map((p, i) => (
+            <Planet
+              key={p.href}
+              def={p}
               onNavigate={(href) => {
                 startLoading();
                 router.push(href)
-              }} />
+              }}
+              showOverlay={i === closestPlanetIndex} />
           ))}
 
           {/* subtle “nebula fog” planes for vibes */}

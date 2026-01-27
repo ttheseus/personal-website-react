@@ -5,102 +5,138 @@ import { usePathname } from "next/navigation";
 import Image from "next/image"
 
 type LoadingCtx = {
-  startLoading: () => void;
+    startLoading: () => void;
 };
 
 const Ctx = createContext<LoadingCtx | null>(null);
 
 export function useLoading() {
-  const v = useContext(Ctx);
-  if (!v) throw new Error("useLoading must be used within <LoadingProvider />");
-  return v;
+    const v = useContext(Ctx);
+    if (!v) throw new Error("useLoading must be used within <LoadingProvider />");
+    return v;
 }
 
 export function LoadingProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+    const pathname = usePathname();
 
-  // "mounted overlay" + "fade state"
-  const [mounted, setMounted] = useState(true);      // starts ON for initial render
-  const [fading, setFading] = useState(false);
+    // "mounted overlay" + "fade state"
+    const [mounted, setMounted] = useState(true);      // starts ON for initial render
+    const [fading, setFading] = useState(false);
 
-  const fadeTimer = useRef<number | null>(null);
+    const fadeTimer = useRef<number | null>(null);
 
-  const startLoading = () => {
-    if (fadeTimer.current) {
-      window.clearTimeout(fadeTimer.current);
-      fadeTimer.current = null;
-    }
-    setMounted(true);
-    setFading(false);
-  };
+    const startLoading = () => {
+        if (fadeTimer.current) {
+            window.clearTimeout(fadeTimer.current);
+            fadeTimer.current = null;
+        }
+        setMounted(true);
+        setFading(false);
+    };
 
-  const stopLoading = () => {
-    setFading(true);
-    if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
-    fadeTimer.current = window.setTimeout(() => {
-      setMounted(false);
-      setFading(false);
-      fadeTimer.current = null;
-    }, 520); // must match CSS transition
-  };
+    const stopLoading = () => {
+        setFading(true);
+        if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+        fadeTimer.current = window.setTimeout(() => {
+            setMounted(false);
+            setFading(false);
+            fadeTimer.current = null;
+        }, 520); // must match CSS transition
+    };
 
-  // Initial page hydration -> fade out once React is ready
-  useEffect(() => {
-    // allow at least a frame so it never "pops"
-    const t = window.setTimeout(() => stopLoading(), 80);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Initial page hydration -> fade out once React is ready
+    useEffect(() => {
+        // allow at least a frame so it never "pops"
+        const t = window.setTimeout(() => stopLoading(), 80);
+        return () => window.clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-  // When route changes, the next screen is now rendered -> fade out.
-  useEffect(() => {
-    // If something called startLoading() (GalaxyMenu), this will fade out once navigation completes.
-    stopLoading();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    // When route changes, the next screen is now rendered -> fade out.
+    useEffect(() => {
+        // If something called startLoading() (GalaxyMenu), this will fade out once navigation completes.
+        stopLoading();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
 
-  const ctxValue = useMemo(() => ({ startLoading }), []);
+    const ctxValue = useMemo(
+        () => ({
+            startLoading,
+        }),
+        []
+    );
 
-  return (
-    <Ctx.Provider value={ctxValue}>
-      {children}
-      <MoonLoadingOverlay mounted={mounted} fading={fading} />
-    </Ctx.Provider>
-  );
+        // 🔧 DEV-ONLY DEBUG COMMANDS
+    useEffect(() => {
+        if (process.env.NODE_ENV !== "development") return;
+
+        (window as any).showMoonLoader = () => {
+            if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+            setMounted(true);
+            setFading(false);
+            console.log("[MoonLoader] shown");
+        };
+
+        (window as any).hideMoonLoader = () => {
+            setFading(true);
+            fadeTimer.current = window.setTimeout(() => {
+                setMounted(false);
+                setFading(false);
+                fadeTimer.current = null;
+                console.log("[MoonLoader] hidden");
+            }, 520);
+        };
+
+        console.log(
+            "%cMoon loader debug ready",
+            "color:#7aa2ff;font-weight:bold"
+        );
+
+        return () => {
+            delete (window as any).showMoonLoader;
+            delete (window as any).hideMoonLoader;
+        };
+    }, []);
+
+    return (
+        <Ctx.Provider value={ctxValue}>
+            {children}
+            <MoonLoadingOverlay mounted={mounted} fading={fading} />
+        </Ctx.Provider>
+    );
 }
 
 function MoonLoadingOverlay({ mounted, fading }: { mounted: boolean; fading: boolean }) {
-  const phases = useMemo(
-    () => [
-      { key: "new", src: "/assets/moon/new.png" },
-      { key: "waxing-crescent", src: "/assets/moon/waxing-crescent.png" },
-      { key: "first-quarter", src: "/assets/moon/first-quarter.png" },
-      { key: "waxing-gibbous", src: "/assets/moon/waxing-gibbous.png" },
-      { key: "full", src: "/moon/full.png" },
-      { key: "waning-gibbous", src: "/assets/moon/waning-gibbous.png" },
-      { key: "third-quarter", src: "/assets/moon/third-quarter.png" },
-      { key: "waning-crescent", src: "/assets/moon/waning-crescent.png" },
-      { key: "new-2", src: "/assets/moon/new.png" },
-    ],
-    []
-  );
+    const phases = useMemo(
+        () => [
+            { key: "new", src: "/assets/moon/new.png" },
+            { key: "waxing-crescent", src: "/assets/moon/waxing-crescent.png" },
+            { key: "first-quarter", src: "/assets/moon/first-quarter.png" },
+            { key: "waxing-gibbous", src: "/assets/moon/waxing-gibbous.png" },
+            { key: "full", src: "/assets/moon/full.png" },
+            { key: "waning-gibbous", src: "/assets/moon/waning-gibbous.png" },
+            { key: "third-quarter", src: "/assets/moon/third-quarter.png" },
+            { key: "waning-crescent", src: "/assets/moon/waning-crescent.png" },
+        ],
+        []
+    );
 
-  const [idx, setIdx] = useState(0);
+    const [idx, setIdx] = useState(0);
 
-  useEffect(() => {
-    if (!mounted) return;
-    const id = window.setInterval(() => {
-      setIdx((v) => (v + 1) % phases.length);
-    }, 800);
-    return () => window.clearInterval(id);
-  }, [mounted, phases.length]);
+    useEffect(() => {
+        if (!mounted) return;
+        const id = window.setInterval(() => {
+            setIdx((v) => (v + 1) % phases.length);
+        }, 800);
+        return () => window.clearInterval(id);
+    }, [mounted, phases.length]);
 
-  if (!mounted) return null;
+    if (!mounted) return null;
 
-  
-  return (
-    <>
-      <style>{`
+
+    return (
+        <>
+            <style>{`
         .moonLoaderOverlay {
           position: fixed;
           inset: 0;
@@ -146,19 +182,19 @@ function MoonLoadingOverlay({ mounted, fading }: { mounted: boolean; fading: boo
         }
       `}</style>
 
-      <div className={`moonLoaderOverlay ${fading ? "fadeOut" : ""}`}>
-        <div className="moonIconWrap">
-          <div key={phases[idx].key} className="moonSwap">
-            <Image
-              src={phases[idx].src}
-              alt="Loading"
-              width={120}
-              height={120}
-              priority
-            />
-          </div>
-        </div>
-      </div>
-    </>
-  );
+            <div className={`moonLoaderOverlay ${fading ? "fadeOut" : ""}`}>
+                <div className="moonIconWrap">
+                    <div key={phases[idx].key} className="moonSwap">
+                        <Image
+                            src={phases[idx].src}
+                            alt="Loading"
+                            width={120}
+                            height={120}
+                            priority
+                        />
+                    </div>
+                </div>
+            </div>
+        </>
+    );
 }
