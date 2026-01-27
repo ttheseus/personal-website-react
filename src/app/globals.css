@@ -174,8 +174,7 @@ button:hover::before {
 
 body {
   background: var(--background);
-  background: linear-gradient(to bottom, #522062 -50%, #538899 10%, #faccd0 90%, #f80780 140%), 
-              url('/assets/background.png');
+  background: linear-gradient(to bottom, #522062 -50%, #538899 10%, #faccd0 90%, #f80780 140%);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

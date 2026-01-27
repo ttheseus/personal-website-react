@@ -19,42 +19,58 @@ export function useLoading() {
 export function LoadingProvider({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
+    // Minimum time the loader must stay visible before fading
+    const MIN_VISIBLE_MS = 1500;
+
     // "mounted overlay" + "fade state"
     const [mounted, setMounted] = useState(true);      // starts ON for initial render
     const [fading, setFading] = useState(false);
 
     const fadeTimer = useRef<number | null>(null);
+    const minTimer = useRef<number | null>(null);
+    const shownAt = useRef<number>(Date.now()); // when loader last became visible
+
+    const clearTimers = () => {
+        if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+        if (minTimer.current) window.clearTimeout(minTimer.current);
+        fadeTimer.current = null;
+        minTimer.current = null;
+    };
 
     const startLoading = () => {
-        if (fadeTimer.current) {
-            window.clearTimeout(fadeTimer.current);
-            fadeTimer.current = null;
-        }
+        clearTimers();
+        shownAt.current = Date.now();
         setMounted(true);
         setFading(false);
     };
 
     const stopLoading = () => {
-        setFading(true);
-        if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
-        fadeTimer.current = window.setTimeout(() => {
-            setMounted(false);
-            setFading(false);
-            fadeTimer.current = null;
-        }, 520); // must match CSS transition
+        clearTimers();
+
+        const elapsed = Date.now() - shownAt.current;
+        const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
+
+        // Wait until minimum duration has passed, then fade out
+        minTimer.current = window.setTimeout(() => {
+            setFading(true);
+
+            fadeTimer.current = window.setTimeout(() => {
+                setMounted(false);
+                setFading(false);
+                fadeTimer.current = null;
+            }, 520); // must match CSS transition
+        }, remaining);
     };
 
-    // Initial page hydration -> fade out once React is ready
+    // Initial page hydration -> fade out once React is ready (but enforce min visible time)
     useEffect(() => {
-        // allow at least a frame so it never "pops"
-        const t = window.setTimeout(() => stopLoading(), 80);
-        return () => window.clearTimeout(t);
+        shownAt.current = Date.now();
+        stopLoading();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // When route changes, the next screen is now rendered -> fade out.
+    // When route changes, the next screen is now rendered -> fade out (but enforce min visible time)
     useEffect(() => {
-        // If something called startLoading() (GalaxyMenu), this will fade out once navigation completes.
         stopLoading();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
@@ -66,36 +82,29 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
         []
     );
 
-        // 🔧 DEV-ONLY DEBUG COMMANDS
+    // 🔧 DEV-ONLY DEBUG COMMANDS (kept intact)
     useEffect(() => {
         if (process.env.NODE_ENV !== "development") return;
 
         (window as any).showMoonLoader = () => {
-            if (fadeTimer.current) window.clearTimeout(fadeTimer.current);
+            clearTimers();
+            shownAt.current = Date.now();
             setMounted(true);
             setFading(false);
             console.log("[MoonLoader] shown");
         };
 
         (window as any).hideMoonLoader = () => {
-            setFading(true);
-            fadeTimer.current = window.setTimeout(() => {
-                setMounted(false);
-                setFading(false);
-                fadeTimer.current = null;
-                console.log("[MoonLoader] hidden");
-            }, 520);
+            stopLoading();
         };
 
-        console.log(
-            "%cMoon loader debug ready",
-            "color:#7aa2ff;font-weight:bold"
-        );
+        console.log("%cMoon loader debug ready", "color:#7aa2ff;font-weight:bold");
 
         return () => {
             delete (window as any).showMoonLoader;
             delete (window as any).hideMoonLoader;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

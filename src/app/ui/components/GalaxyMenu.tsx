@@ -651,6 +651,74 @@ function StarStreakField({
   );
 }
 
+function ParallaxBackground({
+  z = -140,
+  width = 260,
+  height = 140,
+  zoomStrength = 0.22,
+  driftX = 0.8,
+  driftY = 0.35,
+}: {
+  z?: number;
+  width?: number;
+  height?: number;
+  zoomStrength?: number;
+  driftX?: number;
+  driftY?: number;
+}) {
+  const scroll = useScroll();
+  const bgTex = useLoader(THREE.TextureLoader, "/assets/background.png");
+
+  const groupRef = useRef<THREE.Group>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useEffect(() => {
+    // sRGB correct
+    if ("colorSpace" in bgTex) {
+      // @ts-ignore
+      bgTex.colorSpace = THREE.SRGBColorSpace;
+    } else {
+      // @ts-ignore
+      bgTex.encoding = THREE.sRGBEncoding;
+    }
+
+    bgTex.anisotropy = 8;
+    bgTex.wrapS = THREE.ClampToEdgeWrapping;
+    bgTex.wrapT = THREE.ClampToEdgeWrapping;
+    bgTex.needsUpdate = true;
+  }, [bgTex]);
+
+  useFrame((_, dt) => {
+    const off = scroll.offset*0.35; // 0..1
+
+    // "zoom in" slowly with scroll
+    const targetScale = 1 + off * zoomStrength;
+
+    if (groupRef.current) {
+      // tiny drift for depth feel
+      const targetX = -off * driftX;
+      const targetY = off * driftY;
+
+      groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, 1 - Math.pow(0.0001, dt));
+      groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, targetY, 1 - Math.pow(0.0001, dt));
+      groupRef.current.scale.x = THREE.MathUtils.lerp(groupRef.current.scale.x, targetScale, 1 - Math.pow(0.0001, dt));
+      groupRef.current.scale.y = THREE.MathUtils.lerp(groupRef.current.scale.y, targetScale, 1 - Math.pow(0.0001, dt));
+      groupRef.current.scale.z = 1;
+    }
+  });
+
+  return (
+    <Billboard follow lockZ={false} lockX={false} lockY={false}>
+      <group ref={groupRef} position={[0, 0, z]}>
+        <mesh ref={meshRef}>
+          <planeGeometry args={[width, height]} />
+          <meshBasicMaterial map={bgTex} transparent opacity={0.9} depthWrite={false} />
+        </mesh>
+      </group>
+    </Billboard>
+  );
+}
+
 export default function GalaxyMenu() {
   const router = useRouter();
   const { startLoading } = useLoading();
@@ -744,6 +812,7 @@ export default function GalaxyMenu() {
       <Canvas camera={{ position: [0, 0, 8], fov: 50 }}>
         {/* background stars */}
         <Stars radius={120} depth={80} count={2500} factor={3} fade speed={0.6} />
+        
         <StarStreakField
           count={1400}
           radius={24}
@@ -759,6 +828,12 @@ export default function GalaxyMenu() {
 
         {/* Scroll moves camera forward through 3D space */}
         <ScrollControls pages={3.2} damping={0.2}>
+          <ParallaxBackground />
+
+          {/* background starfield parallax (also slower) */}
+          <group position={[0, 0, -90]}>
+            <Stars radius={140} depth={120} count={2500} factor={3} fade speed={0.2} />
+          </group>
           <CameraRail />
           <InvertScrollWheel />
           <DistanceScrollbar />
