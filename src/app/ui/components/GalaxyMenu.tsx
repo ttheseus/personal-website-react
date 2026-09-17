@@ -71,15 +71,8 @@ function Planet({
       : overlayTexPlanet1;
 
   useEffect(() => {
-    // Three.js version-safe sRGB setup
-    if ("colorSpace" in overlayTex) {
-      // @ts-ignore
-      overlayTex.colorSpace = THREE.SRGBColorSpace;
-    } else {
-      // older Three
-      // @ts-ignore
-      overlayTex.encoding = THREE.sRGBEncoding;
-    }
+    // @ts-ignore
+    overlayTex.colorSpace = THREE.SRGBColorSpace;
 
     overlayTex.anisotropy = 8;
 
@@ -692,14 +685,8 @@ function ParallaxBackground({
   const meshRef = useRef<THREE.Mesh>(null);
 
   useEffect(() => {
-    // sRGB correct
-    if ("colorSpace" in bgTex) {
-      // @ts-ignore
-      bgTex.colorSpace = THREE.SRGBColorSpace;
-    } else {
-      // @ts-ignore
-      bgTex.encoding = THREE.sRGBEncoding;
-    }
+    // @ts-ignore
+    bgTex.colorSpace = THREE.SRGBColorSpace;
 
     bgTex.anisotropy = 8;
     bgTex.wrapS = THREE.ClampToEdgeWrapping;
