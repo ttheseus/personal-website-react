@@ -118,14 +118,14 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
 function MoonLoadingOverlay({ mounted, fading }: { mounted: boolean; fading: boolean }) {
     const phases = useMemo(
         () => [
-            { key: "new", src: "/assets/moon/new.png" },
-            { key: "waxing-crescent", src: "/assets/moon/waxing-crescent.png" },
-            { key: "first-quarter", src: "/assets/moon/first-quarter.png" },
-            { key: "waxing-gibbous", src: "/assets/moon/waxing-gibbous.png" },
-            { key: "full", src: "/assets/moon/full.png" },
-            { key: "waning-gibbous", src: "/assets/moon/waning-gibbous.png" },
-            { key: "third-quarter", src: "/assets/moon/third-quarter.png" },
-            { key: "waning-crescent", src: "/assets/moon/waning-crescent.png" },
+            { key: "new", src: "/assets/moon/new.PNG" },
+            { key: "waxing-crescent", src: "/assets/moon/waxing-crescent.PNG" },
+            { key: "first-quarter", src: "/assets/moon/first-quarter.PNG" },
+            { key: "waxing-gibbous", src: "/assets/moon/waxing-gibbous.PNG" },
+            { key: "full", src: "/assets/moon/full.PNG" },
+            { key: "waning-gibbous", src: "/assets/moon/waning-gibbous.PNG" },
+            { key: "third-quarter", src: "/assets/moon/third-quarter.PNG" },
+            { key: "waning-crescent", src: "/assets/moon/waning-crescent.PNG" },
         ],
         []
     );
