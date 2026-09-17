@@ -8,6 +8,10 @@ import * as THREE from "three";
 import { useRouter } from "next/navigation";
 import { useLoading } from "./Loading";
 
+function setArtCommissionsSource() {
+  document.cookie = "art-commissions_source=website; path=/; SameSite = Lax";
+}
+
 
 type PlanetDef = {
   name: string;
@@ -17,6 +21,7 @@ type PlanetDef = {
   color: string;
   rotationSpeed: number;
   axis: [number, number, number];
+  texture?: string; // optional surface texture (e.g. "/assets/Planet1.png")
 };
 
 function axisFromObliquity(obliquityDeg: number, yawDeg: number) {
@@ -53,7 +58,17 @@ function Planet({
   const labelRef = useRef<THREE.Group>(null);    // anchor group on sphere surface
 
   const { camera } = useThree();
-  const overlayTex = useLoader(THREE.TextureLoader, "/assets/Planet1.png");
+  const overlayTexPlanet1 = useLoader(THREE.TextureLoader, "/assets/Planet1.png");
+  const overlayTexPlanet2 = useLoader(THREE.TextureLoader, "/assets/Planet2.png");
+  const overlayTexPlanet3 = useLoader(THREE.TextureLoader, "/assets/Planet3.png");
+
+  // pick whichever surface texture belongs to this planet (same treatment for every textured planet)
+  const overlayTex =
+    def.texture === "/assets/Planet3.png"
+      ? overlayTexPlanet3
+      : def.texture === "/assets/Planet2.png"
+      ? overlayTexPlanet2
+      : overlayTexPlanet1;
 
   useEffect(() => {
     // Three.js version-safe sRGB setup
@@ -205,7 +220,6 @@ function Planet({
     }
   }
 
-
   // Keep label dot in the same VIEWING spot (top-visible hemisphere) regardless of planet rotation/axis.
   // This does NOT attach to the spinning surface — it's view-anchored.
   function updateAnchorFromView() {
@@ -287,6 +301,11 @@ function Planet({
             }}
             onClick={(e) => {
               e.stopPropagation();
+
+              if (def.href === "/art-commissions") {
+                setArtCommissionsSource();
+              }
+
               onNavigate(def.href);
             }}
           >
@@ -766,6 +785,7 @@ export default function GalaxyMenu() {
         color: "#538899",
         rotationSpeed: 0.55,
         axis: axisFromObliquity(18, 25), // slight tilt
+        texture: "/assets/Planet1.png",
       },
       {
         name: "coding projects",
@@ -775,6 +795,7 @@ export default function GalaxyMenu() {
         color: "#522062",
         rotationSpeed: 0.35,
         axis: axisFromObliquity(7, 140), // near-upright
+        texture: "/assets/Planet2.png", // 50/50 blend of the Planet1 + Planet3 textures
       },
       {
         name: "art commissions",
@@ -784,28 +805,11 @@ export default function GalaxyMenu() {
         color: "#f80780",
         rotationSpeed: 0.7,
         axis: axisFromObliquity(33, 300), // noticeable tilt
+        texture: "/assets/Planet3.png", // furthest planet — same texture treatment as planet 1
       },
     ],
     []
   );
-
-
-  const closestPlanetIndex = useMemo(() => {
-    const cam = new THREE.Vector3(0, 0, 8); // matches CameraRail start
-    let bestIdx = 0;
-    let bestDist = Infinity;
-
-    planets.forEach((p, i) => {
-      const d = cam.distanceTo(new THREE.Vector3(...p.position));
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
-    });
-
-    return bestIdx;
-  }, [planets]);
-
 
   return (
     <div className="w-screen h-screen relative">
@@ -846,7 +850,7 @@ export default function GalaxyMenu() {
                 startLoading();
                 router.push(href)
               }}
-              showOverlay={i === closestPlanetIndex} />
+              showOverlay={Boolean(p.texture)} />
           ))}
 
           {/* subtle “nebula fog” planes for vibes */}

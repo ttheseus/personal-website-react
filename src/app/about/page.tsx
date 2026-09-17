@@ -2,16 +2,30 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
+import { Html, Text } from "@react-three/drei";
 import * as THREE from "three";
+import { useRouter } from "next/navigation";
+import { panels } from "./panels";
 
 type PopupState =
   | { open: false }
   | { open: true; id: string; title?: string };
 
 export default function AboutPage() {
+  const router = useRouter();
   const [popup, setPopup] = useState<PopupState>({ open: false });
   const [hoveredHotspotId, setHoveredHotspotId] = useState<string | null>(null);
+
+  // Shared handler for both click-to-select and crosshair-select.
+  // The exit door reuses the same hotspot mechanism with a reserved
+  // id of "exit" — instead of opening a panel, it navigates home.
+  const handleSelect = (id: string, title?: string) => {
+    if (id === "exit") {
+      router.push("/");
+      return;
+    }
+    setPopup({ open: true, id, title });
+  };
 
   return (
     <div className="w-screen h-screen relative">
@@ -27,8 +41,9 @@ export default function AboutPage() {
         <pointLight position={[-6, 3, -4]} intensity={0.6} />
 
         <Room
+          panels={panels}
           hoveredHotspotId={hoveredHotspotId}
-          onHotspotClick={(id, title) => setPopup({ open: true, id, title })}
+          onHotspotClick={handleSelect}
         />
 
         <WASDCameraController
@@ -40,7 +55,7 @@ export default function AboutPage() {
           minZ={-7.2}
           maxZ={7.2}
           onHoverHotspot={(id) => setHoveredHotspotId(id)}
-          onSelectHotspot={(id, title) => setPopup({ open: true, id, title })}
+          onSelectHotspot={handleSelect}
         />
 
       </Canvas>
@@ -85,9 +100,9 @@ export default function AboutPage() {
               </button>
             </div>
 
-            {/* Empty for now (fill later with text/images/components) */}
+            {/* Content comes from panels.tsx — edit that file, not here */}
             <div className="p-6 h-[calc(100%-56px)] overflow-auto">
-              {/* placeholder */}
+              {panels.find((p) => p.id === popup.id)?.content}
             </div>
           </div>
         </div>
@@ -97,9 +112,11 @@ export default function AboutPage() {
 }
 
 function Room({
+  panels: panelDefs,
   onHotspotClick,
   hoveredHotspotId,
 }: {
+  panels: { id: string; title: string; position: [number, number, number] }[];
   onHotspotClick: (id: string, title?: string) => void;
   hoveredHotspotId: string | null;
 }) {
@@ -116,21 +133,12 @@ function Room({
   const wallMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#111827"),
+        color: new THREE.Color("#1e293b"),
         roughness: 0.85,
         metalness: 0.0,
         emissive: new THREE.Color("#000000"),
         emissiveIntensity: 0.08,
       }),
-    []
-  );
-
-  const hotspots = useMemo(
-    () => [
-      { id: "bio", title: "bio", pos: [-2.4, 0.7, -1.2] as [number, number, number] },
-      { id: "skills", title: "skills", pos: [2.0, 0.7, -0.5] as [number, number, number] },
-      { id: "timeline", title: "timeline", pos: [0.0, 0.7, 2.0] as [number, number, number] },
-    ],
     []
   );
 
@@ -181,17 +189,90 @@ function Room({
         <meshStandardMaterial color={"#538899"} roughness={0.55} metalness={0.05} />
       </mesh>
 
-      {/* Clickable hotspots */}
-      {hotspots.map((h) => (
+      {/* Clickable hotspots — driven by panels.tsx, add a panel there to add one here */}
+      {panelDefs.map((h) => (
         <Hotspot
           key={h.id}
           id={h.id}
           title={h.title}
-          position={h.pos}
+          position={h.position}
           onClick={onHotspotClick}
           externallyHovered={hoveredHotspotId === h.id}
         />
       ))}
+
+      {/* Exit door — behind the desk, on the back wall. Bright + crude
+          on purpose; swap the mesh/sign for real 3D assets later. */}
+      <ExitDoor onExit={() => onHotspotClick("exit")} />
+    </group>
+  );
+}
+
+function ExitDoor({ onExit }: { onExit: () => void }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    // Positioned on the back wall (z = -8), directly behind the desk (x = 0)
+    <group position={[0, 0, -7.9]}>
+      {/* Door slab — bright placeholder color, easy to spot */}
+      <mesh
+        position={[0, 1.3, 0]}
+        userData={{ selectable: true, hotspotId: "exit", hotspotTitle: "exit" }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation();
+          setHovered(false);
+          document.body.style.cursor = "default";
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          document.exitPointerLock?.();
+          document.body.style.cursor = "default";
+          onExit();
+        }}
+      >
+        <boxGeometry args={[1.6, 2.6, 0.12]} />
+        <meshStandardMaterial
+          color={hovered ? "#ff4fb8" : "#f80780"}
+          roughness={0.4}
+          metalness={0.05}
+          emissive={new THREE.Color("#f80780")}
+          emissiveIntensity={hovered ? 0.5 : 0.3}
+        />
+      </mesh>
+
+      {/* Exit sign — deliberately crude placeholder, swap for a 3D asset later */}
+      <group position={[0, 2.95, 0.02]}>
+        <mesh>
+          <boxGeometry args={[1.3, 0.42, 0.08]} />
+          <meshStandardMaterial
+            color="#0b0f16"
+            emissive={new THREE.Color("#00ff6a")}
+            emissiveIntensity={0.6}
+          />
+        </mesh>
+        <Text
+          position={[0, 0, 0.05]}
+          fontSize={0.22}
+          color="#00ff6a"
+          anchorX="center"
+          anchorY="middle"
+        >
+          EXIT
+        </Text>
+      </group>
+
+      {hovered && (
+        <Html position={[0, 1.3, 0.1]} center style={{ pointerEvents: "none" }}>
+          <div className="planet-label">
+            <span className="cyber-arrow">leave</span>
+          </div>
+        </Html>
+      )}
     </group>
   );
 }

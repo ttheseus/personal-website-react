@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito, Inconsolata } from "next/font/google";
 import "./globals.css";
 import { LoadingProvider } from "./ui/components/Loading";
+import RecordPlayer from "./ui/components/RecordPlayer";
 
 const nunito = Nunito({
   variable: "--font-nunito",
@@ -30,9 +31,9 @@ export default function RootLayout({
       >
         <LoadingProvider>
           {children}
+          <RecordPlayer />
         </LoadingProvider>
       </body>
     </html>
   );
 }
-
