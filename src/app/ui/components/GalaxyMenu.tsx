@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useRouter } from "next/navigation";
 import { useLoading } from "./Loading";
+import { withBasePath } from "../../lib/basePath";
 
 function setArtCommissionsSource() {
   document.cookie = "art-commissions_source=website; path=/; SameSite = Lax";
@@ -58,9 +59,9 @@ function Planet({
   const labelRef = useRef<THREE.Group>(null);    // anchor group on sphere surface
 
   const { camera } = useThree();
-  const overlayTexPlanet1 = useLoader(THREE.TextureLoader, "/assets/Planet1.png");
-  const overlayTexPlanet2 = useLoader(THREE.TextureLoader, "/assets/Planet2.png");
-  const overlayTexPlanet3 = useLoader(THREE.TextureLoader, "/assets/Planet3.png");
+  const overlayTexPlanet1 = useLoader(THREE.TextureLoader, withBasePath("/assets/Planet1.png"));
+  const overlayTexPlanet2 = useLoader(THREE.TextureLoader, withBasePath("/assets/Planet2.png"));
+  const overlayTexPlanet3 = useLoader(THREE.TextureLoader, withBasePath("/assets/Planet3.png"));
 
   // pick whichever surface texture belongs to this planet (same treatment for every textured planet)
   const overlayTex =
@@ -71,7 +72,8 @@ function Planet({
       : overlayTexPlanet1;
 
   useEffect(() => {
-    // @ts-ignore
+    // Three.js sRGB setup (colorSpace API — sRGBEncoding was removed from
+    // newer `three` releases, so no version-fallback branch here)
     overlayTex.colorSpace = THREE.SRGBColorSpace;
 
     overlayTex.anisotropy = 8;
@@ -679,13 +681,13 @@ function ParallaxBackground({
   driftY?: number;
 }) {
   const scroll = useScroll();
-  const bgTex = useLoader(THREE.TextureLoader, "/assets/background.png");
+  const bgTex = useLoader(THREE.TextureLoader, withBasePath("/assets/background.png"));
 
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.Mesh>(null);
 
   useEffect(() => {
-    // @ts-ignore
+    // sRGB correct
     bgTex.colorSpace = THREE.SRGBColorSpace;
 
     bgTex.anisotropy = 8;

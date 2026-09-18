@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useRouter } from "next/navigation";
 import { useLoading } from "../ui/components/Loading";
+import { withBasePath } from "../lib/basePath";
 
 /*
  * Schwarzschild ray-tracing adaptation of:
@@ -754,14 +755,14 @@ function useBlackHoleTextures() {
     let alive = true;
 
     Promise.all([
-      loadTexture(loader, "/assets/black-hole/stars.png", THREE.LinearFilter),
+      loadTexture(loader, withBasePath("/assets/black-hole/stars.png"), THREE.LinearFilter),
       loadTexture(
         loader,
-        "/assets/black-hole/accretion-disk.png",
+        withBasePath("/assets/black-hole/accretion-disk.png"),
         THREE.LinearFilter,
         THREE.RepeatWrapping,
       ),
-      loadTexture(loader, "/assets/black-hole/spectra.png", THREE.LinearFilter),
+      loadTexture(loader, withBasePath("/assets/black-hole/spectra.png"), THREE.LinearFilter),
     ])
       .then((loaded) => {
         if (alive) setTextures(loaded as [THREE.Texture, THREE.Texture, THREE.Texture]);

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { withBasePath } from "../../lib/basePath";
 
 type Track = {
   uri: string;
@@ -180,7 +181,7 @@ export default function RecordPlayer() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/spotify-playlist")
+    fetch(withBasePath("/api/spotify-playlist"))
       .then((r) => r.json())
       .then((data: { tracks?: Track[]; error?: string }) => {
         if (cancelled) return;
@@ -326,22 +327,35 @@ export default function RecordPlayer() {
     if (!controllerRef.current) return;
 
     if (isPlaying) {
-      elapsedMsRef.current += Date.now() - (playStartedAtRef.current ?? Date.now());
+      const track = tracksRef.current[orderRef.current[posRef.current]];
+      const rawElapsed =
+        elapsedMsRef.current + (Date.now() - (playStartedAtRef.current ?? Date.now()));
+      elapsedMsRef.current = track ? Math.min(rawElapsed, track.durationMs) : rawElapsed;
       playStartedAtRef.current = null;
       clearAdvanceTimer();
       controllerRef.current.pause();
       setIsPlaying(false);
     } else {
+      const track = tracksRef.current[orderRef.current[posRef.current]];
+      const remaining = track ? track.durationMs - elapsedMsRef.current : 0;
+
+      // If the track was essentially finished when it got paused, jump
+      // straight to the next one instead of resuming for a fraction of a
+      // second and then auto-advancing — that flash of "resume, then
+      // immediately skip" is what read as the pause button skipping.
+      if (track && remaining <= 1500) {
+        goNext();
+        return;
+      }
+
       playStartedAtRef.current = Date.now();
       startedRef.current = true;
       setHasStarted(true);
       controllerRef.current.resume();
       setIsPlaying(true);
 
-      const track = tracksRef.current[orderRef.current[posRef.current]];
       if (track) {
-        const remaining = track.durationMs - elapsedMsRef.current;
-        scheduleAdvanceTimer(remaining > 0 ? remaining : 1000);
+        scheduleAdvanceTimer(remaining);
       }
     }
   }
@@ -515,14 +529,14 @@ export default function RecordPlayer() {
           margin-top: 12px;
           display: flex;
           justify-content: center;
-          gap: 14px;
+          gap: 24px;
         }
 
         .recordPopupBtn {
           all: unset;
           cursor: pointer;
-          width: 34px;
-          height: 34px;
+          width: 40px;
+          height: 40px;
           border-radius: 999px;
           display: grid;
           place-items: center;
@@ -534,6 +548,11 @@ export default function RecordPlayer() {
 
         .recordPopupBtn:hover {
           background: rgba(250, 204, 208, 0.18);
+        }
+
+        .recordPopupBtn:focus-visible {
+          outline: 2px solid #faccd0;
+          outline-offset: 2px;
         }
 
         .recordPopupNote {
@@ -562,6 +581,7 @@ export default function RecordPlayer() {
         tabIndex={0}
         aria-label={currentTrack ? `Now playing: ${currentTrack.name} by ${currentTrack.artist}` : "Music player"}
         onClick={handleIconClick}
+        onMouseDown={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -569,14 +589,14 @@ export default function RecordPlayer() {
           }
         }}
       >
-        <img src="/assets/record/record1.PNG" alt="" className="recordLayer" draggable={false} />
+        <img src={withBasePath("/assets/record/record1.PNG")} alt="" className="recordLayer" draggable={false} />
         <img
-          src="/assets/record/record2.PNG"
+          src={withBasePath("/assets/record/record2.PNG")}
           alt=""
           className={`recordLayer recordShine ${isPlaying ? "spinning" : ""}`}
           draggable={false}
         />
-        <img src="/assets/record/record3.PNG" alt="" className="recordLayer" draggable={false} />
+        <img src={withBasePath("/assets/record/record3.PNG")} alt="" className="recordLayer" draggable={false} />
       </div>
 
       {popupOpen && (
@@ -610,12 +630,40 @@ export default function RecordPlayer() {
               </div>
 
               <div className="recordPopupControls">
-                <button className="recordPopupBtn" onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} aria-label={isPlaying ? "Pause" : "Play"}>
+                <div
+                  className="recordPopupBtn"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      togglePlayPause();
+                    }
+                  }}
+                  aria-label={isPlaying ? "Pause" : "Play"}
+                >
                   {isPlaying ? "❚❚" : "▶"}
-                </button>
-                <button className="recordPopupBtn" onClick={handleSkipNext} aria-label="Skip to next song">
+                </div>
+                <div
+                  className="recordPopupBtn"
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleSkipNext}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goNext();
+                    }
+                  }}
+                  aria-label="Skip to next song"
+                >
                   ⏭
-                </button>
+                </div>
               </div>
             </>
           ) : loadError ? (
@@ -623,7 +671,7 @@ export default function RecordPlayer() {
               {loadError.includes("NOT_CONNECTED") ? (
                 <>
                   Spotify isn&apos;t connected yet.{" "}
-                  <a href="/api/spotify-login" style={{ color: "#faccd0", textDecoration: "underline" }}>
+                  <a href={withBasePath("/api/spotify-login")} style={{ color: "#faccd0", textDecoration: "underline" }}>
                     Connect Spotify
                   </a>
                 </>
